@@ -1,3 +1,11 @@
+# Global cache configuration
+cache: &global_cache
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .cache/pip
+    - .cache/uv
+  policy: pull-push
+
 .builddocker: &builddocker |
     export CONTAINER_BASE=$CI_REGISTRY_IMAGE
     docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -15,8 +23,12 @@
 
 stages:
     - build
+    - test
+    - lint
+    - security
     - docker
     - deploy
+    - release
 
 docker:
     stage: docker
@@ -34,27 +46,184 @@ build:
     image: python:3.12-slim
     tags:
         - shell
+    cache:
+        <<: *global_cache
+    variables:
+        PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+        UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
     script:
+        - mkdir -p .cache/pip .cache/uv
         - pip install uv
         - uv venv .venv
         - . .venv/bin/activate
         - uv pip install -e .
+        - uv pip install pytest pytest-cov black flake8 mypy
     artifacts:
         paths:
             - .venv/
         expire_in: 1 hour
 
-# Add a deploy stage for Kubernetes (optional)
-deploy:
+# Add testing stage
+test:
+    stage: test
+    image: python:3.12-slim
+    tags:
+        - shell
+    dependencies:
+        - build
+    script:
+        - . .venv/bin/activate
+        - mkdir -p test-reports/
+        - pytest --cov=. --cov-report=xml:test-reports/coverage.xml || true
+    artifacts:
+        paths:
+            - test-reports/
+        reports:
+            coverage_report:
+                coverage_format: cobertura
+                path: test-reports/coverage.xml
+        expire_in: 1 week
+
+# Add linting stage
+lint:
+    stage: lint
+    image: python:3.12-slim
+    tags:
+        - shell
+    dependencies:
+        - build
+    script:
+        - . .venv/bin/activate
+        - black --check . || true
+        - flake8 . || true
+        - mypy . || true
+    allow_failure: true
+    
+# Security scanning
+security:scan:
+    stage: security
+    image: python:3.12-slim
+    tags:
+        - shell
+    dependencies:
+        - build
+    script:
+        - . .venv/bin/activate
+        - uv pip install bandit safety
+        - mkdir -p security-reports/
+        - bandit -r . -f json -o security-reports/bandit-report.json || true
+        - safety check --json > security-reports/safety-report.json || true
+    artifacts:
+        paths:
+            - security-reports/
+        expire_in: 1 week
+    allow_failure: true
+
+# Docker image scanning
+security:docker-scan:
+    stage: security
+    image: docker:latest
+    tags:
+        - shell
+    script:
+        - apk add --no-cache curl
+        - mkdir -p security-reports/
+        - curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+        - docker build -t temp-image-for-scan:latest .
+        - grype temp-image-for-scan:latest -o json > security-reports/docker-scan.json || true
+    artifacts:
+        paths:
+            - security-reports/
+        expire_in: 1 week
+    allow_failure: true
+
+# Common deployment template
+.deploy_template: &deploy_template
     stage: deploy
     image: bitnami/kubectl:latest
     tags:
         - shell
     script:
-        - echo "Deploying to Kubernetes..."
+        - echo "Deploying to Kubernetes in $KUBE_NAMESPACE namespace..."
+        - kubectl config set-context --current --namespace=$KUBE_NAMESPACE
+        - |
+          # Create ConfigMap for environment-specific settings
+          cat > config.yaml << EOF
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: mem0-mcp-config
+          data:
+            BACKEND_TYPE: "${BACKEND_TYPE}"
+            REDIS_URL: "${REDIS_URL}"
+            MYSQL_URL: "${MYSQL_URL}"
+          EOF
+        - kubectl apply -f config.yaml
         - kubectl apply -k kubernetes/
+        - kubectl rollout restart deployment/mem0-mcp
+    needs:
+        - docker
+
+# Development environment deployment
+deploy:dev:
+    <<: *deploy_template
+    environment:
+        name: development
+    variables:
+        KUBE_NAMESPACE: "mem0-mcp-dev"
+        BACKEND_TYPE: "redis"
+        REDIS_URL: "redis://redis:6379/0"
+        MYSQL_URL: "mysql+pymysql://root:password@mysql:3306/mem0_mcp"
+    only:
+        - develop
+        - /^feature\/.*$/
+    when: manual
+
+# Staging environment deployment
+deploy:staging:
+    <<: *deploy_template
+    environment:
+        name: staging
+    variables:
+        KUBE_NAMESPACE: "mem0-mcp-staging"
+        BACKEND_TYPE: "mysql"
+        REDIS_URL: "redis://redis:6379/0"
+        MYSQL_URL: "mysql+pymysql://root:password@mysql:3306/mem0_mcp"
     only:
         - main
     when: manual
+
+# Production environment deployment
+deploy:production:
+    <<: *deploy_template
     environment:
         name: production
+    variables:
+        KUBE_NAMESPACE: "mem0-mcp-prod"
+        BACKEND_TYPE: "mysql"
+        REDIS_URL: "redis://redis:6379/0"
+        MYSQL_URL: "mysql+pymysql://root:password@mysql:3306/mem0_mcp"
+    only:
+        - tags
+    when: manual
+    rules:
+        - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+          when: manual
+          
+# Create a release when a tag is pushed
+release:
+    stage: release
+    image: registry.gitlab.com/gitlab-org/release-cli:latest
+    tags:
+        - shell
+    script:
+        - echo "Creating release for $CI_COMMIT_TAG"
+    release:
+        name: 'Release $CI_COMMIT_TAG'
+        description: 'Release created from tag $CI_COMMIT_TAG'
+        tag_name: '$CI_COMMIT_TAG'
+        ref: '$CI_COMMIT_TAG'
+    only:
+        - tags
+    rules:
+        - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
