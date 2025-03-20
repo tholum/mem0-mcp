@@ -220,29 +220,13 @@ docker-compose up -d
 
 ### GitLab CI/CD Integration
 
-This project includes a comprehensive GitLab CI/CD configuration with multiple stages:
-
-- **Build**: Compiles the application and installs dependencies
-- **Test**: Runs unit tests with pytest and generates coverage reports
-- **Lint**: Performs code quality checks with black, flake8, and mypy
-- **Security**: Scans code and Docker images for vulnerabilities
-- **Docker**: Builds and pushes Docker images to the GitLab Container Registry
-- **Deploy**: Deploys to Kubernetes environments (dev, staging, production)
-- **Release**: Creates GitLab releases when version tags are pushed
+This project includes a GitLab CI/CD configuration for Docker image building:
 
 ### Docker Image Building
 
+- The pipeline builds and pushes Docker images to the GitLab Container Registry
 - Images are tagged with both the commit SHA and 'latest'
 - Specialized images for different backends are built from `Dockerfile.mysql` and `Dockerfile.redis`
-- Docker image scanning is performed to detect vulnerabilities
-
-### Multi-Environment Deployments
-
-The pipeline supports deployments to multiple environments:
-
-- **Development**: Deploys from feature branches, uses Redis backend
-- **Staging**: Deploys from main branch, uses MySQL backend
-- **Production**: Deploys from version tags, uses MySQL backend
 
 ### Setup Instructions
 
@@ -253,21 +237,10 @@ To use the GitLab CI/CD pipeline:
    - `CI_REGISTRY`: Your GitLab registry URL
    - `CI_REGISTRY_USER`: Registry username
    - `CI_REGISTRY_PASSWORD`: Registry password
-   - `KUBE_CONFIG`: Base64-encoded Kubernetes config (for deployments)
 
 3. Ensure your GitLab runner has the 'shell' tag and Docker installed
-4. For Kubernetes deployments, set up the appropriate namespaces:
-   - `mem0-mcp-dev`
-   - `mem0-mcp-staging`
-   - `mem0-mcp-prod`
 
-### Versioning and Releases
-
-To create a new release:
-
-1. Tag a commit with a version number: `git tag v1.0.0`
-2. Push the tag: `git push origin v1.0.0`
-3. The pipeline will automatically create a GitLab release
+The pipeline will automatically build and push Docker images on each commit.
 
 ## Docker Manual Setup
 
