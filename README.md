@@ -218,6 +218,28 @@ You can also run the application using Docker:
 docker-compose up -d
 ```
 
+### GitLab CI/CD Integration
+
+This project includes GitLab CI/CD configuration for automated Docker image building:
+
+- The pipeline builds and pushes Docker images to the GitLab Container Registry
+- Images are tagged with both the commit SHA and 'latest'
+- Specialized images for different backends are built from `Dockerfile.mysql` and `Dockerfile.redis`
+- The pipeline includes build, docker, and deploy stages
+- Kubernetes deployment is available as a manual step
+
+To use the GitLab CI/CD pipeline:
+
+1. Import the repository into GitLab
+2. Configure the following CI/CD variables:
+   - `CI_REGISTRY`: Your GitLab registry URL
+   - `CI_REGISTRY_USER`: Registry username
+   - `CI_REGISTRY_PASSWORD`: Registry password
+
+3. Ensure your GitLab runner has the 'shell' tag and Docker installed
+
+The pipeline will automatically build and push Docker images on each commit.
+
 2. Or build and run manually:
 
 ```bash
