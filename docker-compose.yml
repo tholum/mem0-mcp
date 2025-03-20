@@ -1,0 +1,29 @@
+version: '3'
+
+services:
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  mem0-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - BACKEND_TYPE=redis
+      - REDIS_URL=redis://redis:6379/0
+      # Uncomment and set if using mem0 backend
+      # - BACKEND_TYPE=mem0
+      # - MEM0_API_KEY=${MEM0_API_KEY}
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  redis-data:

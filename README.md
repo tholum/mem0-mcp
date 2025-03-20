@@ -1,6 +1,10 @@
-# MCP Server with Mem0 for Managing Coding Preferences
+# MCP Server for Managing Coding Preferences
 
-This demonstrates a structured approach for using an [MCP](https://modelcontextprotocol.io/introduction) server with [mem0](https://mem0.ai) to manage coding preferences efficiently. The server can be used with Cursor and provides essential tools for storing, retrieving, and searching coding preferences.
+This demonstrates a structured approach for using an [MCP](https://modelcontextprotocol.io/introduction) server to manage coding preferences efficiently. The server can be used with Cursor and provides essential tools for storing, retrieving, and searching coding preferences.
+
+The server supports two backend options:
+1. [mem0](https://mem0.ai) - Cloud-based memory storage (requires API key)
+2. Redis - Self-hosted storage option (no API key required)
 
 ## Installation
 
@@ -24,27 +28,115 @@ source .venv/bin/activate
 uv pip install -e .
 ```
 
-5. Update `.env` file in the root directory with your mem0 API key:
+5. Configure your backend:
+
+### For mem0 backend:
+Update `.env` file in the root directory with your mem0 API key:
 
 ```bash
+BACKEND_TYPE=mem0
 MEM0_API_KEY=your_api_key_here
+```
+
+### For Redis backend:
+Update `.env` file to use Redis (no API key required):
+
+```bash
+BACKEND_TYPE=redis
+REDIS_URL=redis://localhost:6379/0  # Optional, defaults to this value
 ```
 
 ## Usage
 
-1. Start the MCP server:
+### Running with Local Python
+
+1. If using Redis backend, make sure Redis is running:
 
 ```bash
-uv run main.py
+# Install Redis (Ubuntu/Debian)
+sudo apt-get install redis-server
+
+# Start Redis
+sudo systemctl start redis-server
 ```
 
-2. In Cursor, connect to the SSE endpoint, follow this [doc](https://docs.cursor.com/context/model-context-protocol) for reference:
+2. Start the MCP server:
+
+```bash
+# With default backend (from .env file)
+uv run main.py
+
+# Or specify backend directly
+BACKEND_TYPE=redis uv run main.py
+```
+
+3. In Cursor, connect to the SSE endpoint, follow this [doc](https://docs.cursor.com/context/model-context-protocol) for reference:
+
+```
+http://0.0.0.0:8080/sse
+```
+
+4. Open the Composer in Cursor and switch to `Agent` mode.
+
+### Running with Docker
+
+1. Build and run using Docker Compose:
+
+```bash
+# Start both the MCP server and Redis
+docker-compose up -d
+```
+
+2. In Cursor, connect to the SSE endpoint:
 
 ```
 http://0.0.0.0:8080/sse
 ```
 
 3. Open the Composer in Cursor and switch to `Agent` mode.
+
+### Deploying to Kubernetes
+
+The repository includes Kubernetes deployment files in the `kubernetes/` directory.
+
+1. Build and push the Docker image to your registry:
+
+```bash
+# Build the image
+docker build -t your-registry/mem0-mcp:latest .
+
+# Push to your registry
+docker push your-registry/mem0-mcp:latest
+```
+
+2. Update the image reference in `kubernetes/mem0-mcp-deployment.yaml`:
+
+```yaml
+image: your-registry/mem0-mcp:latest
+```
+
+3. Create a namespace and deploy:
+
+```bash
+# Create namespace
+kubectl create namespace mem0-mcp
+
+# Apply the Kubernetes manifests
+kubectl apply -k kubernetes/
+```
+
+4. Access the service:
+
+```bash
+# Port forward for local access
+kubectl -n mem0-mcp port-forward svc/mem0-mcp 8080:8080
+```
+
+5. In Cursor, connect to the SSE endpoint:
+
+```
+http://localhost:8080/sse
+```
 
 ## Demo with Cursor
 
