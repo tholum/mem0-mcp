@@ -23,6 +23,10 @@ EXPOSE 8080
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+# Default to Redis backend to run without mem0 account
+ENV BACKEND_TYPE=redis
+# Default Redis URL (override with docker-compose or command line)
+ENV REDIS_URL=redis://redis:6379/0
 
 # Command to run the application
 CMD ["/app/.venv/bin/python", "main.py"]
