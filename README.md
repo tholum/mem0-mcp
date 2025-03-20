@@ -177,3 +177,31 @@ uv run main.py --host <your host> --port <your port>
 
 The server exposes an SSE endpoint at `/sse` that MCP clients can connect to for accessing the coding preferences management tools.
 
+## Docker Setup
+
+You can also run the application using Docker:
+
+1. Build and run using Docker Compose:
+
+```bash
+docker-compose up -d
+```
+
+2. Or build and run manually:
+
+```bash
+# Build the Docker image
+docker build -t mem0-mcp .
+
+# Run the container
+docker run -p 8080:8080 --env-file .env -d mem0-mcp
+```
+
+3. Access the SSE endpoint at:
+
+```
+http://localhost:8080/sse
+```
+
+Make sure your `.env` file contains a valid `MEM0_API_KEY` before running the Docker container.
+
