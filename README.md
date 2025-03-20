@@ -137,7 +137,35 @@ uv run main.py --host <your host> --port <your port>
 
 The server exposes an SSE endpoint at `/sse` that MCP clients can connect to for accessing the coding preferences management tools.
 
-### Deploying to Kubernetes
+## Docker Setup
+
+You can also run the application using Docker:
+
+1. Build and run using Docker Compose:
+
+```bash
+docker-compose up -d
+```
+
+2. Or build and run manually:
+
+```bash
+# Build the Docker image
+docker build -t mem0-mcp .
+
+# Run the container
+docker run -p 8080:8080 --env-file .env -d mem0-mcp
+```
+
+3. Access the SSE endpoint at:
+
+```
+http://localhost:8080/sse
+```
+
+Make sure your `.env` file contains the appropriate configuration for your chosen backend before running the Docker container.
+
+## Deploying to Kubernetes
 
 The repository includes Kubernetes deployment files in the `kubernetes/` directory.
 

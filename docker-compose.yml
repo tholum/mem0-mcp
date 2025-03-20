@@ -16,7 +16,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
   mem0-mcp:
     build:
       context: .
@@ -29,6 +28,8 @@ services:
       # Uncomment and set if using mem0 backend
       # - BACKEND_TYPE=mem0
       # - MEM0_API_KEY=${MEM0_API_KEY}
+    volumes:
+      - ./.env:/app/.env
     depends_on:
       mysql:
         condition: service_healthy
