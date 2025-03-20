@@ -1,6 +1,10 @@
-# MCP Server with Mem0 for Managing Coding Preferences
+# MCP Server for Managing Coding Preferences
 
-This demonstrates a structured approach for using an [MCP](https://modelcontextprotocol.io/introduction) server with [mem0](https://mem0.ai) to manage coding preferences efficiently. The server can be used with Cursor and provides essential tools for storing, retrieving, and searching coding preferences.
+This demonstrates a structured approach for using an [MCP](https://modelcontextprotocol.io/introduction) server to manage coding preferences efficiently. The server can be used with Cursor and provides essential tools for storing, retrieving, and searching coding preferences.
+
+The server supports multiple backend options:
+1. [mem0](https://mem0.ai) - Cloud-based memory storage (requires API key)
+2. MySQL/MariaDB - Self-hosted relational database (no API key required)
 
 ## Installation
 
@@ -24,21 +28,69 @@ source .venv/bin/activate
 uv pip install -e .
 ```
 
-5. Update `.env` file in the root directory with your mem0 API key:
+5. Configure your backend:
+
+### For mem0 backend:
+Update `.env` file in the root directory with your mem0 API key:
 
 ```bash
+BACKEND_TYPE=mem0
 MEM0_API_KEY=your_api_key_here
+```
+
+### For MySQL backend:
+Update `.env` file to use MySQL (no API key required):
+
+```bash
+BACKEND_TYPE=mysql
+MYSQL_URL=mysql+pymysql://root:password@localhost:3306/mem0_mcp  # Adjust as needed
 ```
 
 ## Usage
 
-1. Start the MCP server:
+### Running with Local Python
+
+1. If using MySQL backend, make sure MySQL is running:
 
 ```bash
-uv run main.py
+# Install MySQL (Ubuntu/Debian)
+sudo apt-get install mysql-server
+
+# Start MySQL
+sudo systemctl start mysql
+
+# Create database
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS mem0_mcp;"
 ```
 
-2. In Cursor, connect to the SSE endpoint, follow this [doc](https://docs.cursor.com/context/model-context-protocol) for reference:
+2. Start the MCP server:
+
+```bash
+# With default backend (from .env file)
+uv run main.py
+
+# Or specify backend directly
+BACKEND_TYPE=mysql uv run main.py
+```
+
+3. In Cursor, connect to the SSE endpoint, follow this [doc](https://docs.cursor.com/context/model-context-protocol) for reference:
+
+```
+http://0.0.0.0:8080/sse
+```
+
+4. Open the Composer in Cursor and switch to `Agent` mode.
+
+### Running with Docker
+
+1. Build and run using Docker Compose:
+
+```bash
+# Start both the MCP server and MySQL
+docker-compose up -d
+```
+
+2. In Cursor, connect to the SSE endpoint:
 
 ```
 http://0.0.0.0:8080/sse
@@ -84,4 +136,52 @@ uv run main.py --host <your host> --port <your port>
 ```
 
 The server exposes an SSE endpoint at `/sse` that MCP clients can connect to for accessing the coding preferences management tools.
+
+### Deploying to Kubernetes
+
+The repository includes Kubernetes deployment files in the `kubernetes/` directory.
+
+1. Build and push the Docker image to your registry:
+
+```bash
+# Build the image
+docker build -t your-registry/mem0-mcp:latest .
+
+# Push to your registry
+docker push your-registry/mem0-mcp:latest
+```
+
+2. Update the image reference in `kubernetes/mem0-mcp-deployment.yaml`:
+
+```yaml
+image: your-registry/mem0-mcp:latest
+```
+
+3. Create a namespace and deploy:
+
+```bash
+# Create namespace
+kubectl create namespace mem0-mcp
+
+# Apply the Kubernetes manifests
+kubectl apply -k kubernetes/
+```
+
+4. Access the service:
+
+```bash
+# Port forward for local access
+kubectl -n mem0-mcp port-forward svc/mem0-mcp 8080:8080
+```
+
+5. In Cursor, connect to the SSE endpoint:
+
+```
+http://localhost:8080/sse
+```
+
+The Kubernetes deployment includes:
+- MySQL database with persistent storage
+- mem0-mcp server configured to use MySQL backend
+- Ingress for external access (requires configuration)
 

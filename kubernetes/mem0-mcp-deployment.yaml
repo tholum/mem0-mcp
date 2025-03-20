@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mem0-mcp
+  labels:
+    app: mem0-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mem0-mcp
+  template:
+    metadata:
+      labels:
+        app: mem0-mcp
+    spec:
+      containers:
+      - name: mem0-mcp
+        image: ${YOUR_REGISTRY}/mem0-mcp:latest  # Replace with your image registry
+        ports:
+        - containerPort: 8080
+        env:
+        - name: BACKEND_TYPE
+          value: "mysql"
+        - name: MYSQL_URL
+          value: "mysql+pymysql://root:$(MYSQL_PASSWORD)@mysql:3306/mem0_mcp"
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: password
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mem0-mcp
+spec:
+  selector:
+    app: mem0-mcp
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mem0-mcp-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: mem0-mcp.example.com  # Replace with your domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mem0-mcp
+            port:
+              number: 8080

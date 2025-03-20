@@ -5,18 +5,21 @@ from starlette.requests import Request
 from starlette.routing import Mount, Route
 from mcp.server import Server
 import uvicorn
-from mem0 import MemoryClient
-from dotenv import load_dotenv
 import json
+import os
+import argparse
+from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
 # Initialize FastMCP server for mem0 tools
 mcp = FastMCP("mem0-mcp")
 
-# Initialize mem0 client and set default user
-mem0_client = MemoryClient()
+# Default user ID
 DEFAULT_USER_ID = "cursor_mcp"
+
+# Custom instructions for memory storage
 CUSTOM_INSTRUCTIONS = """
 Extract the Following Information:  
 
@@ -25,10 +28,33 @@ Extract the Following Information:
 - Related Technical Details: Include information about the programming language, dependencies, and system specifications.  
 - Key Features: Highlight the main functionalities and important aspects of the snippet.
 """
-mem0_client.update_project(custom_instructions=CUSTOM_INSTRUCTIONS)
+
+# Determine which backend to use
+BACKEND_TYPE = os.environ.get("BACKEND_TYPE", "mem0").lower()
+
+if BACKEND_TYPE == "mysql":
+    try:
+        from mysql_backend import MySQLMemoryBackend
+        # Get MySQL connection details from environment or use defaults
+        MYSQL_URL = os.environ.get("MYSQL_URL", "mysql+pymysql://root:password@localhost:3306/mem0_mcp")
+        memory_client = MySQLMemoryBackend(mysql_url=MYSQL_URL)
+        print(f"Using MySQL backend at {MYSQL_URL}")
+    except ImportError:
+        raise ImportError("MySQL backend selected but dependencies not installed. Run 'pip install pymysql sqlalchemy sentence-transformers'")
+elif BACKEND_TYPE == "mem0":
+    # Use mem0 backend
+    try:
+        from mem0 import MemoryClient
+        memory_client = MemoryClient()
+        memory_client.update_project(custom_instructions=CUSTOM_INSTRUCTIONS)
+        print("Using mem0 backend")
+    except ImportError:
+        raise ImportError("mem0 backend selected but mem0ai package not installed. Run 'pip install mem0ai' or set BACKEND_TYPE=mysql")
+else:
+    raise ValueError(f"Unknown backend type: {BACKEND_TYPE}. Supported types: mem0, mysql")
 
 @mcp.tool(
-    description="""Add a new coding preference to mem0. This tool stores code snippets, implementation details,
+    description="""Add a new coding preference to storage. This tool stores code snippets, implementation details,
     and coding patterns for future reference. Store every code snippet. When storing code, you should include:
     - Complete code with all necessary imports and dependencies
     - Language/framework version information (e.g., "Python 3.9", "React 18")
@@ -43,7 +69,7 @@ mem0_client.update_project(custom_instructions=CUSTOM_INSTRUCTIONS)
     The preference will be indexed for semantic search and can be retrieved later using natural language queries."""
 )
 async def add_coding_preference(text: str) -> str:
-    """Add a new coding preference to mem0.
+    """Add a new coding preference to storage.
 
     This tool is designed to store code snippets, implementation patterns, and programming knowledge.
     When storing code, it's recommended to include:
@@ -58,7 +84,7 @@ async def add_coding_preference(text: str) -> str:
     """
     try:
         messages = [{"role": "user", "content": text}]
-        mem0_client.add(messages, user_id=DEFAULT_USER_ID, output_format="v1.1")
+        memory_client.add(messages, user_id=DEFAULT_USER_ID, output_format="v1.1")
         return f"Successfully added preference: {text}"
     except Exception as e:
         return f"Error adding preference: {str(e)}"
@@ -88,7 +114,7 @@ async def get_all_coding_preferences() -> str:
     Each preference includes metadata about when it was created and its content type.
     """
     try:
-        memories = mem0_client.get_all(user_id=DEFAULT_USER_ID, page=1, page_size=50)
+        memories = memory_client.get_all(user_id=DEFAULT_USER_ID, page=1, page_size=50)
         flattened_memories = [memory["memory"] for memory in memories["results"]]
         return json.dumps(flattened_memories, indent=2)
     except Exception as e:
@@ -121,7 +147,7 @@ async def search_coding_preferences(query: str) -> str:
               or specific technical terms.
     """
     try:
-        memories = mem0_client.search(query, user_id=DEFAULT_USER_ID, output_format="v1.1")
+        memories = memory_client.search(query, user_id=DEFAULT_USER_ID, output_format="v1.1")
         flattened_memories = [memory["memory"] for memory in memories["results"]]
         return json.dumps(flattened_memories, indent=2)
     except Exception as e:
