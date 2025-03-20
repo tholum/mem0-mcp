@@ -1,0 +1,60 @@
+.builddocker: &builddocker |
+    export CONTAINER_BASE=$CI_REGISTRY_IMAGE
+    docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    docker build -t $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHORT_SHA .
+    docker tag $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHORT_SHA $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:latest
+    docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:$CI_COMMIT_SHORT_SHA
+    docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG:latest
+    for CUSTOM in $(ls Dockerfile\.* | cut -d"." -f2)
+    do
+        docker build -t $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG/$CUSTOM:$CI_COMMIT_SHORT_SHA . -f Dockerfile.$CUSTOM
+        docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG/$CUSTOM:$CI_COMMIT_SHORT_SHA
+        docker tag $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG/$CUSTOM:$CI_COMMIT_SHORT_SHA $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG/$CUSTOM:latest 
+        docker push $CI_REGISTRY_IMAGE/$CI_COMMIT_REF_SLUG/$CUSTOM:latest
+    done
+
+stages:
+    - build
+    - docker
+    - deploy
+
+docker:
+    stage: docker
+    image: docker:latest
+    except:
+        - tags
+    tags:
+        - shell
+    script:
+      - *builddocker
+
+# Add a build stage for Python dependencies
+build:
+    stage: build
+    image: python:3.12-slim
+    tags:
+        - shell
+    script:
+        - pip install uv
+        - uv venv .venv
+        - . .venv/bin/activate
+        - uv pip install -e .
+    artifacts:
+        paths:
+            - .venv/
+        expire_in: 1 hour
+
+# Add a deploy stage for Kubernetes (optional)
+deploy:
+    stage: deploy
+    image: bitnami/kubectl:latest
+    tags:
+        - shell
+    script:
+        - echo "Deploying to Kubernetes..."
+        - kubectl apply -k kubernetes/
+    only:
+        - main
+    when: manual
+    environment:
+        name: production
