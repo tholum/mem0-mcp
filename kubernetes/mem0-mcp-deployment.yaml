@@ -21,9 +21,16 @@ spec:
         - containerPort: 8080
         env:
         - name: BACKEND_TYPE
-          value: "redis"
+          value: "redis"  # Change to "mysql" if you want to use MySQL
         - name: REDIS_URL
           value: "redis://redis:6379/0"
+        - name: MYSQL_URL
+          value: "mysql+pymysql://root:$(MYSQL_PASSWORD)@mysql:3306/mem0_mcp"
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: password
         resources:
           limits:
             memory: "512Mi"

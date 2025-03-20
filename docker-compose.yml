@@ -8,6 +8,22 @@ services:
     volumes:
       - redis-data:/data
     restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=mem0_mcp
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   mem0-mcp:
     build:
       context: .
@@ -17,6 +33,7 @@ services:
     environment:
       - BACKEND_TYPE=redis
       - REDIS_URL=redis://redis:6379/0
+      - MYSQL_URL=mysql+pymysql://root:password@mysql:3306/mem0_mcp
       # Uncomment and set if using mem0 backend
       # - BACKEND_TYPE=mem0
       # - MEM0_API_KEY=${MEM0_API_KEY}
@@ -24,7 +41,10 @@ services:
       - ./.env:/app/.env
     depends_on:
       - redis
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   redis-data:
+  mysql-data:

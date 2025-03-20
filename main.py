@@ -47,15 +47,26 @@ if BACKEND_TYPE == "redis":
     REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     memory_client = RedisMemoryBackend(redis_url=REDIS_URL)
     print(f"Using Redis backend at {REDIS_URL}")
-else:
-    # Default to mem0 backend
+elif BACKEND_TYPE == "mysql":
+    try:
+        from mysql_backend import MySQLMemoryBackend
+        # Get MySQL connection details from environment or use defaults
+        MYSQL_URL = os.environ.get("MYSQL_URL", "mysql+pymysql://root:password@localhost:3306/mem0_mcp")
+        memory_client = MySQLMemoryBackend(mysql_url=MYSQL_URL)
+        print(f"Using MySQL backend at {MYSQL_URL}")
+    except ImportError:
+        raise ImportError("MySQL backend selected but dependencies not installed. Run 'pip install pymysql sqlalchemy sentence-transformers'")
+elif BACKEND_TYPE == "mem0":
+    # Use mem0 backend
     try:
         from mem0 import MemoryClient
         memory_client = MemoryClient()
         memory_client.update_project(custom_instructions=CUSTOM_INSTRUCTIONS)
         print("Using mem0 backend")
     except ImportError:
-        raise ImportError("mem0 backend selected but mem0ai package not installed. Run 'pip install mem0ai' or set BACKEND_TYPE=redis")
+        raise ImportError("mem0 backend selected but mem0ai package not installed. Run 'pip install mem0ai' or set BACKEND_TYPE=redis/mysql")
+else:
+    raise ValueError(f"Unknown backend type: {BACKEND_TYPE}. Supported types: mem0, redis, mysql")
 
 @mcp.tool(
     description="""Add a new coding preference to storage. This tool stores code snippets, implementation details,

@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - redis-deployment.yaml
+  - mysql-deployment.yaml
   - mem0-mcp-deployment.yaml
 
 namespace: mem0-mcp
